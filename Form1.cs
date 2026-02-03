@@ -12,6 +12,7 @@ namespace OpenMeter
         private PerformanceCounter? downloadCounter;
         private string? activeAdapter;
         private SpeedUnit currentUnit = SpeedUnit.MBps;
+        private OverlayWindow? overlayWindow;
 
         public enum SpeedUnit
         {
@@ -26,13 +27,16 @@ namespace OpenMeter
             DetectActiveNetworkAdapter();
             InitializePerformanceCounters();
             
+            overlayWindow = new OverlayWindow();
+            overlayWindow.Show();
+            
             timer1.Tick += Timer1_Tick;
             timer1.Start();
             
             settingsToolStripMenuItem.Click += SettingsToolStripMenuItem_Click;
             exitToolStripMenuItem.Click += ExitToolStripMenuItem_Click;
             
-            UpdateTrayIcon(0, 0);
+            UpdateDisplay(0, 0);
         }
 
         protected override void SetVisibleCore(bool value)
@@ -110,53 +114,28 @@ namespace OpenMeter
                     ? downloadBytes / (1024 * 1024)
                     : downloadBytes / 1024;
 
-                UpdateTrayIcon(downloadSpeed, uploadSpeed);
+                UpdateDisplay(downloadSpeed, uploadSpeed);
             }
             catch
             {
             }
         }
 
-        private void UpdateTrayIcon(double download, double upload)
+        private void UpdateDisplay(double download, double upload)
         {
             string unit = currentUnit == SpeedUnit.MBps ? "MB/s" : "KB/s";
             
-            Bitmap bitmap = new Bitmap(64, 64);
-            using (Graphics g = Graphics.FromImage(bitmap))
-            {
-                g.Clear(Color.Black);
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.TextRenderingHint = TextRenderingHint.SingleBitPerPixelGridFit;
-
-                Font fontSymbol = new Font("Arial", 9, FontStyle.Regular);
-                Font fontValue = new Font("Arial", 11, FontStyle.Bold);
-                
-                string downloadText = $"{download:F1}";
-                string uploadText = $"{upload:F1}";
-                
-                g.DrawString("Å´", fontSymbol, Brushes.Lime, new PointF(1, 0));
-                g.DrawString(downloadText, fontValue, Brushes.Lime, new PointF(12, 1));
-                
-                g.DrawString("Å™", fontSymbol, Brushes.Red, new PointF(1, 32));
-                g.DrawString(uploadText, fontValue, Brushes.Red, new PointF(12, 33));
-            }
-
-            IntPtr hIcon = bitmap.GetHicon();
-            Icon icon = Icon.FromHandle(hIcon);
+            overlayWindow?.UpdateSpeeds(download, upload, unit);
             
-            notifyIcon1.Icon = icon;
-            notifyIcon1.Text = $"Download: {download:F1} {unit}\nUpload: {upload:F1} {unit}";
-            
-            DestroyIcon(hIcon);
+            notifyIcon1.Text = $"Download: {download:F2} {unit}\nUpload: {upload:F2} {unit}";
         }
-
-        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
-        extern static bool DestroyIcon(IntPtr handle);
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             uploadCounter?.Dispose();
             downloadCounter?.Dispose();
+            overlayWindow?.Close();
+            overlayWindow?.Dispose();
             notifyIcon1.Visible = false;
             mutex?.ReleaseMutex();
             base.OnFormClosing(e);
